@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Professional Transcriber — Whisper + PyAnnote</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface-2: #1f2937;
+    --border: #374151;
+    --text: #f3f4f6;
+    --text-muted: #9ca3af;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --success: #10b981;
+    --success-hover: #059669;
+    --danger: #ef4444;
+    --warning: #f59e0b;
+    --purple: #8b5cf6;
+    --log-bg: #0d1117;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+
+  h1 {
+    font-size: 24px; font-weight: 700; margin-bottom: 4px;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subtitle { color: var(--text-muted); font-size: 13px; margin-bottom: 24px; }
+
+  /* Warning banner for file:// */
+  .warning-banner {
+    display: none;
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid var(--warning);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .warning-banner.show { display: block; }
+  .warning-banner strong { color: var(--warning); }
+  .warning-banner code {
+    background: var(--surface-2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: "SF Mono", Monaco, Consolas, monospace;
+    font-size: 13px;
+    color: #60a5fa;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-muted);
+    margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
+  }
+  .card-title .card-title-left { display: flex; align-items: center; gap: 8px; }
+
+  /* Drop Zone */
+  .dropzone {
+    position: relative;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--surface-2);
+    margin-bottom: 16px;
+    user-select: none;
+  }
+  .dropzone:hover, .dropzone.dragover {
+    border-color: var(--accent);
+    background: rgba(59, 130, 246, 0.05);
+  }
+  .dropzone.has-file {
+    border-color: var(--success);
+    border-style: solid;
+    background: rgba(16, 185, 129, 0.08);
+    cursor: default;
+  }
+  .dropzone-icon { font-size: 40px; margin-bottom: 12px; }
+  .dropzone-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .dropzone-hint { font-size: 13px; color: var(--text-muted); }
+  .dropzone-file-info {
+    margin-top: 12px; font-size: 14px; color: var(--success);
+    font-weight: 600; word-break: break-all;
+  }
+  .dropzone-file-meta {
+    font-size: 12px; color: var(--text-muted); margin-top: 4px;
+  }
+  .dropzone input[type="file"] { display: none; }
+  .btn-change {
+    margin-top: 12px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-change:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Controls */
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 600px) { .controls-grid { grid-template-columns: 1fr; } }
+
+  .field label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: var(--text-muted); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .field select, .field input[type="text"] {
+    width: 100%; padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text); font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    font-family: inherit;
+  }
+  .field input[type="text"] { cursor: text; }
+  .field select:focus, .field input:focus { outline: none; border-color: var(--accent); }
+
+  .toggle-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 12px;
+  }
+  .toggle-row input[type="checkbox"] {
+    width: 18px; height: 18px; accent-color: var(--accent);
+    cursor: pointer;
+  }
+  .toggle-row label {
+    font-size: 14px; cursor: pointer; margin: 0;
+    font-weight: 400; color: var(--text);
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-success:hover:not(:disabled) { background: var(--success-hover); }
+  .btn-purple { background: var(--purple); color: white; }
+  .btn-purple:hover:not(:disabled) { background: #7c3aed; }
+  .btn-ghost {
+    background: transparent; color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--text-muted); color: var(--text); }
+  .btn-sm {
+    padding: 6px 12px; font-size: 12px; border-radius: 6px;
+  }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .btn-row.export { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .btn-row.export .btn { flex: 1; min-width: 140px; }
+
+  /* Progress */
+  .progress-container { margin-top: 16px; display: none; }
+  .progress-bar {
+    height: 8px; background: var(--surface-2);
+    border-radius: 4px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--success));
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+  .progress-info {
+    display: flex; justify-content: space-between;
+    margin-top: 6px; font-size: 12px; color: var(--text-muted);
+  }
+
+  /* Status */
+  .status {
+    font-size: 13px; color: var(--text-muted);
+    margin-top: 12px; min-height: 20px;
+  }
+  .status.error { color: var(--danger); }
+  .status.success { color: var(--success); }
+  .status.warning { color: var(--warning); }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 12px;
+    background: var(--surface-2); padding: 4px; border-radius: 8px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    flex: 1; padding: 8px 12px; border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+    background: transparent; border: none;
+    color: var(--text-muted); cursor: pointer;
+    transition: all 0.15s;
+    min-width: 100px;
+  }
+  .tab.active { background: var(--accent); color: white; }
+
+  /* Output */
+  .output-panel { display: none; }
+  .output-panel.active { display: block; }
+
+  #plainOutput, #mdOutput, #vttOutput {
+    width: 100%; min-height: 300px; resize: vertical;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; font-size: 14px; line-height: 1.7;
+    font-family: "SF Mono", Monaco, "Cascadia Code", Consolas, monospace;
+  }
+  #plainOutput { font-family: inherit; font-size: 15px; }
+  #plainOutput:focus, #mdOutput:focus, #vttOutput:focus { outline: none; border-color: var(--accent); }
+
+  .speaker-block {
+    background: var(--bg);
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px; margin-bottom: 10px;
+    border-radius: 0 8px 8px 0;
+  }
+  .speaker-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px;
+  }
+  .speaker-name {
+    font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .speaker-time {
+    font-size: 11px; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .speaker-text { font-size: 14px; line-height: 1.6; }
+
+  .empty-state {
+    text-align: center; padding: 40px 20px;
+    color: var(--text-muted); font-size: 14px;
+  }
+
+  .audio-player { width: 100%; margin-top: 12px; display: none; }
+  .audio-player audio { width: 100%; }
+
+  .model-info {
+    font-size: 11px; color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+    background: var(--success); color: white;
+    padding: 12px 24px; border-radius: 8px;
+    font-weight: 600; font-size: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--danger); }
+
+  /* LOG PANEL */
+  .log-panel {
+    background: var(--log-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .log-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .log-header-left {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; font-weight: 600;
+  }
+  .log-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px;
+    background: var(--surface-2); color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .log-badge.ok { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+  .log-badge.warn { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+  .log-badge.err { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+  .log-count {
+    background: var(--accent); color: white;
+    padding: 1px 8px; border-radius: 999px; font-size: 11px;
+    min-width: 20px; text-align: center;
+  }
+
+  .log-actions { display: flex; gap: 6px; }
+
+  .log-body {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 12px 16px;
+    font-family: "SF Mono", Monaco, "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #c9d1d9;
+  }
+  .log-panel.collapsed .log-body { display: none; }
+
+  .log-entry {
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(55, 65, 81, 0.4);
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: 10px;
+    align-items: start;
+    word-break: break-word;
+  }
+  .log-entry:last-child { border-bottom: none; }
+  .log-time {
+    color: #6e7681;
+    font-size: 11px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .log-level {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .log-level.info { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+  .log-level.success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+  .log-level.warn { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+  .log-level.error { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+  .log-level.debug { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+  .log-msg { color: #c9d1d9; }
+  .log-msg .log-detail {
+    color: #8b949e;
+    margin-top: 2px;
+    padding-left: 8px;
+    border-left: 2px solid #30363d;
+    white-space: pre-wrap;
+  }
+
+  .log-empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 20px;
+    font-family: -apple-system, sans-serif;
+    font-size: 13px;
+  }
+
+  .env-info {
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-family: -apple-system, sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .env-info div { margin-bottom: 2px; }
+  .env-info strong { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>🎙️ Professional Transcriber</h1>
+  <p class="subtitle">Whisper ASR + PyAnnote Diarization · с диагностикой ошибок</p>
+
+  <!-- Warning banner -->
+  <div class="warning-banner" id="warningBanner">
+    <strong>⚠️ Файл открыт через <code>file://</code> — модели не загрузятся!</strong><br><br>
+    Браузер блокирует загрузку ES-модулей с CDN при открытии HTML напрямую с диска.<br>
+    <strong>Решение:</strong> запустите локальный сервер в папке с файлом:<br>
+    <code>python -m http.server 8000</code> (или <code>npx serve</code>)<br>
+    и откройте <code>http://localhost:8000/имя_файла.html</code>
+  </div>
+
+  <!-- LOG PANEL -->
+  <div class="log-panel" id="logPanel">
+    <div class="log-header" id="logHeader">
+      <div class="log-header-left">
+        <span>🩺 Диагностика</span>
+        <span class="log-badge ok" id="logBadge">готово</span>
+        <span class="log-count" id="logCount">0</span>
+      </div>
+      <div class="log-actions">
+        <button class="btn btn-sm btn-primary" id="copyLogBtn">📋 Скопировать отчёт</button>
+        <button class="btn btn-sm btn-ghost" id="clearLogBtn">🗑</button>
+        <button class="btn btn-sm btn-ghost" id="toggleLogBtn">▲</button>
+      </div>
+    </div>
+    <div class="log-body" id="logBody">
+      <div class="env-info" id="envInfo"></div>
+      <div class="log-empty" id="logEmpty">Логи появятся здесь при работе с файлом.</div>
+      <div id="logEntries"></div>
+    </div>
+  </div>
+
+  <!-- Upload Card -->
+  <div class="card">
+    <div class="card-title">Аудиофайл</div>
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="audio/*">
+      <div class="dropzone-icon">📁</div>
+      <div class="dropzone-title">Перетащите файл или нажмите для выбора</div>
+      <div class="dropzone-hint">MP3, WAV, M4A, OGG, WEBM, FLAC</div>
+      <div class="dropzone-file-info" id="fileInfo" style="display:none;"></div>
+      <div class="dropzone-file-meta" id="fileMeta" style="display:none;"></div>
+      <button class="btn-change" id="changeFileBtn" style="display:none;">Выбрать другой файл</button>
+    </div>
+
+    <div class="audio-player" id="audioPlayer">
+      <audio controls id="audioEl"></audio>
+    </div>
+  </div>
+
+  <!-- Settings Card -->
+  <div class="card">
+    <div class="card-title">Настройки распознавания</div>
+
+    <div class="controls-grid">
+      <div class="field">
+        <label>Язык аудио</label>
+        <select id="langSelect">
+          <option value="russian">🇷🇺 Русский</option>
+          <option value="english">🇬🇧 English</option>
+          <option value="ukrainian">🇺🇦 Українська</option>
+          <option value="german">🇩🇪 Deutsch</option>
+          <option value="french">🇫🇷 Français</option>
+          <option value="spanish">🇪🇸 Español</option>
+          <option value="italian">🇮🇹 Italiano</option>
+          <option value="polish">🇵🇱 Polski</option>
+          <option value="turkish">🇹🇷 Türkçe</option>
+          <option value="chinese">🇨🇳 中文</option>
+          <option value="japanese">🇯🇵 日本語</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Модель Whisper</label>
+        <select id="modelSelect">
+          <option value="Xenova/whisper-tiny">whisper-tiny — быстрая (~40 МБ)</option>
+          <option value="Xenova/whisper-base" selected>whisper-base — баланс (~75 МБ)</option>
+          <option value="Xenova/whisper-small">whisper-small — точная (~250 МБ)</option>
+        </select>
+        <div class="model-info">Модели кэшируются после первой загрузки</div>
+      </div>
+    </div>
+
+    <div class="controls-grid">
+      <div class="field">
+        <label>Название (для экспорта)</label>
+        <input type="text" id="titleInput" placeholder="Например: Интервью с Ивановым">
+      </div>
+      <div class="field">
+        <label>Теги (через запятую, для Obsidian)</label>
+        <input type="text" id="tagsInput" placeholder="транскрипт, интервью, работа">
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <input type="checkbox" id="diarizationToggle" checked>
+      <label for="diarizationToggle">Разделение по спикерам (PyAnnote)</label>
+    </div>
+
+    <div class="toggle-row">
+      <input type="checkbox" id="timestampsToggle" checked>
+      <label for="timestampsToggle">Включать таймкоды в экспорт</label>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="startBtn" disabled>
+        ▶️ Начать расшифровку
+      </button>
+      <button class="btn btn-ghost" id="clearBtn">
+        🗑 Очистить
+      </button>
+    </div>
+
+    <div class="progress-container" id="progressContainer">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-info">
+        <span id="progressLabel">Подготовка...</span>
+        <span id="progressPct">0%</span>
+      </div>
+    </div>
+
+    <div class="status" id="status">Выберите аудиофайл для начала.</div>
+  </div>
+
+  <!-- Output Card -->
+  <div class="card">
+    <div class="card-title">Результат</div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="plain">📄 Текст</button>
+      <button class="tab" data-tab="speakers">👥 Спикеры</button>
+      <button class="tab" data-tab="md">📝 Markdown</button>
+      <button class="tab" data-tab="vtt">🎬 SRT/VTT</button>
+    </div>
+
+    <div class="output-panel active" id="plainPanel">
+      <textarea id="plainOutput" placeholder="Здесь появится расшифровка..."></textarea>
+    </div>
+
+    <div class="output-panel" id="speakersPanel">
+      <div id="speakersOutput">
+        <div class="empty-state">Разделение по спикерам появится здесь после обработки.</div>
+      </div>
+    </div>
+
+    <div class="output-panel" id="mdPanel">
+      <textarea id="mdOutput" placeholder="Markdown для Obsidian появится здесь..." readonly></textarea>
+    </div>
+
+    <div class="output-panel" id="vttPanel">
+      <textarea id="vttOutput" placeholder="Субтитры SRT/VTT появятся здесь..." readonly></textarea>
+    </div>
+
+    <div class="btn-row export">
+      <button class="btn btn-purple" id="exportMdBtn" disabled>📝 Скачать .md</button>
+      <button class="btn btn-success" id="exportSrtBtn" disabled>🎬 Скачать .srt</button>
+      <button class="btn btn-primary" id="exportVttBtn" disabled>🎞️ Скачать .vtt</button>
+      <button class="btn btn-ghost" id="exportPdfBtn" disabled>🖨️ Сохранить как PDF</button>
+      <button class="btn btn-success" id="copyBtn" disabled>📋 Копировать всё</button>
+    </div>
+
+    <div class="model-info" style="margin-top:12px;">
+      🔒 Все данные обрабатываются локально. Аудио не покидает ваш браузер.
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+// ============================================================
+// 1. IMPORT с обработкой ошибок
+// ============================================================
+let pipeline, env, AutoProcessor, AutoModelForAudioFrameClassification;
+let IMPORT_ERROR = null;
+
+try {
+  const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.2.1');
+  pipeline = mod.pipeline;
+  env = mod.env;
+  AutoProcessor = mod.AutoProcessor;
+  AutoModelForAudioFrameClassification = mod.AutoModelForAudioFrameClassification;
+
+  env.allowLocalModels = false;
+  env.useBrowserCache = true;
+
+  console.log('[Transcriber] Transformers.js загружена, экспортов:', Object.keys(mod).length);
+} catch (err) {
+  IMPORT_ERROR = err;
+  console.error('[Transcriber] Не удалось загрузить Transformers.js:', err);
+}
+
+// ============================================================
+// 2. LOGGER
+// ============================================================
+const LOG_MAX = 500;
+const logState = { entries: [], hasError: false, hasWarning: false };
+
+function nowTime() {
+  const d = new Date();
+  return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+
+function formatDetail(detail) {
+  if (detail == null) return '';
+  if (typeof detail === 'string') return detail;
+  if (detail instanceof Error) return `${detail.name}: ${detail.message}\n${detail.stack || ''}`;
+  try { return JSON.stringify(detail, null, 2); } catch { return String(detail); }
+}
+
+function log(level, message, detail) {
+  const entry = {
+    time: nowTime(), level,
+    message: String(message),
+    detail: detail ? formatDetail(detail) : '',
+    ts: Date.now(),
+  };
+  logState.entries.push(entry);
+  if (logState.entries.length > LOG_MAX) logState.entries.shift();
+  if (level === 'error') logState.hasError = true;
+  if (level === 'warn') logState.hasWarning = true;
+  renderLog();
+}
+
+function logError(message, error, context) {
+  const detail = [];
+  if (error) {
+    detail.push('=== Error ===');
+    detail.push(`Name: ${error.name || 'Error'}`);
+    detail.push(`Message: ${error.message || String(error)}`);
+    if (error.stack) { detail.push('Stack:'); detail.push(error.stack); }
+  }
+  if (context) {
+    detail.push('=== Context ===');
+    detail.push(formatDetail(context));
+  }
+  log('error', message, detail.join('\n'));
+}
+
+// ============================================================
+// 3. DOM
+// ============================================================
+const $ = id => document.getElementById(id);
+
+const warningBanner = $('warningBanner');
+const logPanel = $('logPanel');
+const logHeader = $('logHeader');
+const logBody = $('logBody');
+const logEntries = $('logEntries');
+const logEmpty = $('logEmpty');
+const logBadge = $('logBadge');
+const logCount = $('logCount');
+const copyLogBtn = $('copyLogBtn');
+const clearLogBtn = $('clearLogBtn');
+const toggleLogBtn = $('toggleLogBtn');
+const envInfo = $('envInfo');
+
+const dropzone = $('dropzone');
+const fileInput = $('fileInput');
+const fileInfo = $('fileInfo');
+const fileMeta = $('fileMeta');
+const changeFileBtn = $('changeFileBtn');
+const audioPlayer = $('audioPlayer');
+const audioEl = $('audioEl');
+const startBtn = $('startBtn');
+const copyBtn = $('copyBtn');
+const clearBtn = $('clearBtn');
+const statusEl = $('status');
+const progressContainer = $('progressContainer');
+const progressFill = $('progressFill');
+const progressLabel = $('progressLabel');
+const progressPct = $('progressPct');
+const langSelect = $('langSelect');
+const modelSelect = $('modelSelect');
+const diarizationToggle = $('diarizationToggle');
+const timestampsToggle = $('timestampsToggle');
+const titleInput = $('titleInput');
+const tagsInput = $('tagsInput');
+const plainOutput = $('plainOutput');
+const speakersOutput = $('speakersOutput');
+const mdOutput = $('mdOutput');
+const vttOutput = $('vttOutput');
+const exportMdBtn = $('exportMdBtn');
+const exportSrtBtn = $('exportSrtBtn');
+const exportVttBtn = $('exportVttBtn');
+const exportPdfBtn = $('exportPdfBtn');
+const toast = $('toast');
+
+// ============================================================
+// 4. State
+// ============================================================
+let currentFile = null;
+let transcriber = null;
+let loadedModel = null;
+let diarizationModel = null;
+let diarizationProcessor = null;
+let lastResult = null;
+let currentAudioDuration = 0;
+let currentRun = null;
+
+// ============================================================
+// 5. Environment info
+// ============================================================
+function renderEnv() {
+  const ua = navigator.userAgent;
+  const browser = ua.includes('Edg/') ? 'Edge'
+    : ua.includes('YaBrowser') ? 'Yandex'
+    : ua.includes('Chrome/') ? 'Chrome'
+    : ua.includes('Firefox/') ? 'Firefox'
+    : ua.includes('Safari/') ? 'Safari'
+    : 'Unknown';
+
+  const props = [
+    ['Browser', browser],
+    ['User-Agent', ua],
+    ['Platform', navigator.platform || 'n/a'],
+    ['Hardware concurrency', navigator.hardwareConcurrency || 'n/a'],
+    ['Device memory', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'n/a'],
+    ['WebGL2', (() => { try { return !!document.createElement('canvas').getContext('webgl2'); } catch { return false; } })()],
+    ['WebGPU', 'gpu' in navigator],
+    ['Secure context', window.isSecureContext],
+    ['Protocol', location.protocol],
+    ['Transformers.js', pipeline ? '✅ загружена' : '❌ НЕ загружена'],
+  ];
+
+  envInfo.innerHTML = props.map(([k, v]) =>
+    `<div><strong>${k}:</strong> ${escapeHtml(String(v))}</div>`
+  ).join('');
+}
+
+// ============================================================
+// 6. Log Rendering
+// ============================================================
+function renderLog() {
+  logCount.textContent = logState.entries.length;
+
+  if (logState.entries.length === 0) {
+    logEmpty.style.display = 'block';
+    logEntries.innerHTML = '';
+  } else {
+    logEmpty.style.display = 'none';
+    logEntries.innerHTML = logState.entries.map(e => `
+      <div class="log-entry">
+        <span class="log-time">${e.time}</span>
+        <span class="log-level ${e.level}">${e.level}</span>
+        <div class="log-msg">
+          ${escapeHtml(e.message)}
+          ${e.detail ? `<div class="log-detail">${escapeHtml(e.detail)}</div>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  if (logState.hasError) {
+    logBadge.className = 'log-badge err';
+    logBadge.textContent = 'ошибка';
+  } else if (logState.hasWarning) {
+    logBadge.className = 'log-badge warn';
+    logBadge.textContent = 'предупреждение';
+  } else if (logState.entries.length > 0) {
+    logBadge.className = 'log-badge ok';
+    logBadge.textContent = 'ok';
+  } else {
+    logBadge.className = 'log-badge';
+    logBadge.textContent = 'готово';
+  }
+
+  logBody.scrollTop = logBody.scrollHeight;
+}
+
+// ============================================================
+// 7. Full report
+// ============================================================
+function buildFullReport() {
+  const lines = [];
+  lines.push('===== PROFESSIONAL TRANSCRIBER — ДИАГНОСТИЧЕСКИЙ ОТЧЁТ =====');
+  lines.push('');
+  lines.push('--- Окружение ---');
+  const ua = navigator.userAgent;
+  lines.push(`Browser: ${ua}`);
+  lines.push(`Platform: ${navigator.platform || 'n/a'}`);
+  lines.push(`Hardware concurrency: ${navigator.hardwareConcurrency || 'n/a'}`);
+  lines.push(`Device memory: ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'n/a'}`);
+  lines.push(`WebGPU: ${'gpu' in navigator}`);
+  lines.push(`Secure context: ${window.isSecureContext}`);
+  lines.push(`Protocol: ${location.protocol}`);
+  lines.push(`Transformers.js загружена: ${pipeline ? 'ДА' : 'НЕТ'}`);
+  if (IMPORT_ERROR) {
+    lines.push(`IMPORT ERROR: ${IMPORT_ERROR.message}`);
+    lines.push(`IMPORT STACK: ${IMPORT_ERROR.stack || ''}`);
+  }
+  lines.push(`Time: ${new Date().toISOString()}`);
+  lines.push('');
+
+  lines.push('--- Настройки ---');
+  lines.push(`Язык: ${langSelect.value}`);
+  lines.push(`Whisper модель: ${modelSelect.value}`);
+  lines.push(`Диаризация: ${diarizationToggle.checked ? 'вкл' : 'выкл'}`);
+  lines.push(`Таймкоды: ${timestampsToggle.checked ? 'вкл' : 'выкл'}`);
+  if (currentFile) {
+    lines.push(`Файл: ${currentFile.name}`);
+    lines.push(`Размер: ${(currentFile.size / 1024 / 1024).toFixed(2)} МБ`);
+    lines.push(`MIME: ${currentFile.type || 'n/a'}`);
+    if (currentAudioDuration) lines.push(`Длительность: ${formatTime(currentAudioDuration, true)}`);
+  } else {
+    lines.push('Файл: не выбран');
+  }
+  lines.push('');
+
+  lines.push('--- Модели ---');
+  lines.push(`Загружена Whisper: ${loadedModel || 'нет'}`);
+  lines.push(`Модель диаризации: ${diarizationModel ? 'загружена' : 'нет'}`);
+  lines.push('');
+
+  lines.push(`--- Журнал (${logState.entries.length} записей) ---`);
+  for (const e of logState.entries) {
+    lines.push(`[${e.time}] [${e.level.toUpperCase()}] ${e.message}`);
+    if (e.detail) {
+      for (const dl of e.detail.split('\n')) lines.push('    ' + dl);
+    }
+  }
+  lines.push('');
+  lines.push('===== END OF REPORT =====');
+  return lines.join('\n');
+}
+
+async function copyReport() {
+  const report = buildFullReport();
+  try {
+    await navigator.clipboard.writeText(report);
+    showToast('Отчёт скопирован — вставьте его в чат');
+  } catch (err) {
+    const ta = document.createElement('textarea');
+    ta.value = report;
+    ta.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:80%;height:60%;z-index:2000;padding:16px;font-family:monospace;font-size:12px;background:#fff;color:#000;border:2px solid #3b82f6;border-radius:8px;';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); showToast('Отчёт скопирован (fallback)'); }
+    catch { showToast('Выделите текст вручную', true); }
+    setTimeout(() => document.body.removeChild(ta), 8000);
+  }
+}
+
+// ============================================================
+// 8. Global error handlers
+// ============================================================
+window.addEventListener('error', (e) => {
+  logError('Глобальная ошибка (window.onerror)',
+    e.error || new Error(e.message),
+    { filename: e.filename, lineno: e.lineno, colno: e.colno });
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e.reason;
+  logError('Необработанный Promise rejection',
+    reason instanceof Error ? reason : new Error(String(reason)),
+    { reason: String(reason) });
+});
+
+// ============================================================
+// 9. UI Helpers
+// ============================================================
+function setStatus(text, type = '') {
+  statusEl.textContent = text;
+  statusEl.className = 'status' + (type ? ' ' + type : '');
+}
+
+function setProgress(pct, label) {
+  if (pct <= 0 || pct >= 100) {
+    if (pct >= 100) {
+      progressFill.style.width = '100%';
+      progressPct.textContent = '100%';
+      progressLabel.textContent = label || 'Готово!';
+      setTimeout(() => {
+        progressContainer.style.display = 'none';
+        progressFill.style.width = '0%';
+      }, 1500);
+    }
+    return;
+  }
+  progressContainer.style.display = 'block';
+  progressFill.style.width = pct + '%';
+  progressPct.textContent = Math.round(pct) + '%';
+  progressLabel.textContent = label || '';
+}
+
+function formatTime(sec, alwaysHours = false) {
+  if (!isFinite(sec) || sec < 0) sec = 0;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0 || alwaysHours) {
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function formatSrtTime(sec) {
+  if (!isFinite(sec) || sec < 0) sec = 0;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const ms = Math.floor((sec - Math.floor(sec)) * 1000);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+}
+
+function formatVttTime(sec) { return formatSrtTime(sec).replace(',', '.'); }
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function showToast(message, isError = false) {
+  toast.textContent = message;
+  toast.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+// ============================================================
+// 10. FILE HANDLING (исправлен двойной клик)
+// ============================================================
+dropzone.addEventListener('click', (e) => {
+  // Не реагируем на клик по вложенной кнопке "сменить файл" — у неё свой обработчик
+  if (e.target.closest('#changeFileBtn')) return;
+  // Не реагируем на клик по самому input
+  if (e.target === fileInput) return;
+  // Если файл уже выбран — dropzone не кликабелен
+  if (dropzone.classList.contains('has-file')) return;
+
+  log('debug', 'Клик по dropzone → открываем диалог файла');
+  e.preventDefault();
+  fileInput.click();
+});
+
+changeFileBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  log('debug', 'Клик "выбрать другой файл" → открываем диалог');
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) handleFile(file);
+});
+
+dropzone.addEventListener('dragover', (e) => {
+  e.preventDefault(); e.stopPropagation();
+  dropzone.classList.add('dragover');
+});
+dropzone.addEventListener('dragleave', (e) => {
+  e.preventDefault(); e.stopPropagation();
+  dropzone.classList.remove('dragover');
+});
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault(); e.stopPropagation();
+  dropzone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    log('info', 'Файл получен через drag&drop', file.name);
+    handleFile(file);
+  }
+});
+
+function handleFile(file) {
+  const validTypes = ['audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/ogg', 'audio/webm', 'audio/flac', 'audio/x-m4a'];
+  const isValidExt = /\.(mp3|wav|m4a|ogg|webm|flac|aac)$/i.test(file.name);
+
+  log('info', `Файл выбран: ${file.name}`, {
+    size: `${(file.size / 1024 / 1024).toFixed(2)} МБ`,
+    type: file.type || 'unknown',
+  });
+
+  if (!validTypes.includes(file.type) && !isValidExt) {
+    log('warn', 'Файл не похож на аудио, но пробуем загрузить', { name: file.name, type: file.type });
+  }
+
+  currentFile = file;
+  audioEl.src = URL.createObjectURL(file);
+  audioPlayer.style.display = 'block';
+
+  if (!titleInput.value) {
+    titleInput.value = file.name.replace(/\.[^.]+$/, '');
+  }
+
+  dropzone.classList.add('has-file');
+  dropzone.querySelector('.dropzone-icon').textContent = '✅';
+  dropzone.querySelector('.dropzone-title').textContent = 'Файл загружен';
+  dropzone.querySelector('.dropzone-hint').style.display = 'none';
+
+  fileInfo.style.display = 'block';
+  fileInfo.textContent = file.name;
+  fileMeta.style.display = 'block';
+  fileMeta.textContent = `${(file.size / 1024 / 1024).toFixed(2)} МБ`;
+  changeFileBtn.style.display = 'inline-block';
+
+  startBtn.disabled = false;
+  setStatus('Файл готов. Нажмите «Начать расшифровку».', 'success');
+  log('success', 'Файл успешно подготовлен к обработке');
+}
+
+function resetFile() {
+  currentFile = null;
+  fileInput.value = '';
+  audioEl.src = '';
+  audioPlayer.style.display = 'none';
+  dropzone.classList.remove('has-file');
+  dropzone.querySelector('.dropzone-icon').textContent = '📁';
+  dropzone.querySelector('.dropzone-title').textContent = 'Перетащите файл или нажмите для выбора';
+  dropzone.querySelector('.dropzone-hint').style.display = 'block';
+  fileInfo.style.display = 'none';
+  fileMeta.style.display = 'none';
+  changeFileBtn.style.display = 'none';
+  startBtn.disabled = true;
+  setStatus('Выберите аудиофайл для начала.');
+}
+
+// ============================================================
+// 11. Model Loading
+// ============================================================
+async function loadTranscriber(modelName) {
+  if (!pipeline) {
+    throw new Error('Transformers.js не загружена. Проверьте, что страница открыта через http://, а не file://. Смотрите диагностику.');
+  }
+
+  if (loadedModel === modelName && transcriber) {
+    log('info', `Whisper ${modelName} уже загружена (кэш)`);
+    return transcriber;
+  }
+
+  setStatus('⏳ Загрузка модели Whisper...', '');
+  setProgress(2, 'Инициализация...');
+  log('info', `Начинаем загрузку Whisper: ${modelName}`);
+  const t0 = performance.now();
+
+  try {
+    transcriber = await pipeline('automatic-speech-recognition', modelName, {
+      quantized: true,
+      progress_callback: (data) => {
+        if (data.status === 'progress' && data.total) {
+          const pct = 2 + (data.loaded / data.total) * 38;
+          setProgress(pct, `Загрузка: ${data.file || 'модель'}...`);
+        }
+      }
+    });
+  } catch (err) {
+    logError(`Ошибка загрузки Whisper (${modelName})`, err, {
+      model: modelName,
+      elapsed_ms: Math.round(performance.now() - t0),
+    });
+    throw err;
+  }
+
+  const elapsed = Math.round(performance.now() - t0);
+  loadedModel = modelName;
+  setProgress(40, 'Модель Whisper загружена');
+  log('success', `Whisper загружена за ${elapsed} мс`, { model: modelName });
+  return transcriber;
+}
+
+async function loadDiarizationModel() {
+  if (!AutoModelForAudioFrameClassification) {
+    throw new Error('Transformers.js не загружена — диаризация недоступна.');
+  }
+
+  if (diarizationModel && diarizationProcessor) {
+    log('info', 'Модель диаризации уже загружена (кэш)');
+    return;
+  }
+
+  setStatus('⏳ Загрузка модели диаризации PyAnnote...', '');
+  setProgress(42, 'Загрузка PyAnnote...');
+  log('info', 'Загружаем PyAnnote segmentation');
+  const t0 = performance.now();
+  const modelId = 'onnx-community/pyannote-segmentation-3.0';
+
+  try {
+    diarizationModel = await AutoModelForAudioFrameClassification.from_pretrained(modelId);
+    diarizationProcessor = await AutoProcessor.from_pretrained(modelId);
+  } catch (err) {
+    logError('Ошибка загрузки модели диаризации PyAnnote', err, {
+      modelId,
+      elapsed_ms: Math.round(performance.now() - t0),
+      hint: 'Отключите диаризацию в настройках, чтобы получить хотя бы текст.',
+    });
+    throw err;
+  }
+
+  const elapsed = Math.round(performance.now() - t0);
+  setProgress(50, 'Модель диаризации загружена');
+  log('success', `PyAnnote загружена за ${elapsed} мс`);
+}
+
+// ============================================================
+// 12. Audio
+// ============================================================
+async function decodeAudio(file) {
+  log('info', 'Декодирование аудио через Web Audio API...');
+  const t0 = performance.now();
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    log('debug', `Файл прочитан: ${arrayBuffer.byteLength} байт`);
+
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    currentAudioDuration = audioBuffer.duration;
+
+    log('debug', 'Аудио декодировано', {
+      duration_sec: audioBuffer.duration.toFixed(2),
+      sampleRate: audioBuffer.sampleRate,
+      channels: audioBuffer.numberOfChannels,
+    });
+
+    const numChannels = audioBuffer.numberOfChannels;
+    const length = audioBuffer.length;
+    const samples = new Float32Array(length);
+
+    for (let c = 0; c < numChannels; c++) {
+      const channelData = audioBuffer.getChannelData(c);
+      for (let i = 0; i < length; i++) {
+        samples[i] += channelData[i] / numChannels;
+      }
+    }
+
+    await audioContext.close();
+    const elapsed = Math.round(performance.now() - t0);
+    log('success', `Аудио декодировано за ${elapsed} мс (${formatTime(currentAudioDuration, true)})`);
+    return samples;
+  } catch (err) {
+    logError('Ошибка декодирования аудио', err, {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      hint: 'Попробуйте переконвертировать в MP3 или WAV.',
+    });
+    throw err;
+  }
+}
+
+// ============================================================
+// 13. Diarization
+// ============================================================
+async function runDiarization(audioData) {
+  if (!diarizationModel || !diarizationProcessor) {
+    await loadDiarizationModel();
+  }
+
+  setProgress(70, 'Разделение по спикерам...');
+  log('info', 'Запуск нейросетевой диаризации PyAnnote');
+  const t0 = performance.now();
+
+  try {
+    const inputs = await diarizationProcessor(audioData);
+    log('debug', 'Processor обработал вход');
+
+    const { logits } = await diarizationModel(inputs);
+    log('debug', 'Модель вернула логиты');
+
+    if (typeof diarizationProcessor.post_process_speaker_diarization !== 'function') {
+      log('warn', 'post_process_speaker_diarization недоступен — диаризация пропущена');
+      return [];
+    }
+
+    const result = diarizationProcessor.post_process_speaker_diarization(logits, audioData.length);
+    const segments = result[0] || [];
+
+    const elapsed = Math.round(performance.now() - t0);
+    log('success', `Диаризация завершена за ${elapsed} мс`, {
+      segments_count: segments.length,
+      unique_speakers: new Set(segments.map(s => s.id)).size,
+    });
+
+    return segments;
+  } catch (err) {
+    logError('Ошибка диаризации PyAnnote', err, {
+      elapsed_ms: Math.round(performance.now() - t0),
+    });
+    throw err;
+  }
+}
+
+// ============================================================
+// 14. Merge
+// ============================================================
+function mergeTranscriptWithSpeakers(chunks, speakerSegments) {
+  if (!speakerSegments || speakerSegments.length === 0) {
+    return chunks.map(c => ({ ...c, speaker: null }));
+  }
+
+  return chunks.map(chunk => {
+    const chunkStart = chunk.timestamp?.[0] ?? 0;
+    const chunkEnd = chunk.timestamp?.[1] ?? chunkStart + 2;
+    const midPoint = (chunkStart + chunkEnd) / 2;
+
+    let speaker = null;
+    for (const seg of speakerSegments) {
+      if (midPoint >= seg.start && midPoint <= seg.end) {
+        speaker = seg.id;
+        break;
+      }
+    }
+    if (speaker === null) {
+      let minDist = Infinity;
+      for (const seg of speakerSegments) {
+        const dist = Math.min(Math.abs(midPoint - seg.start), Math.abs(midPoint - seg.end));
+        if (dist < minDist) { minDist = dist; speaker = seg.id; }
+      }
+    }
+    return { ...chunk, speaker };
+  });
+}
+
+// ============================================================
+// 15. Grouping
+// ============================================================
+function groupBySpeaker(chunks) {
+  const groups = [];
+  for (const chunk of chunks) {
+    const last = groups[groups.length - 1];
+    if (last && last.speaker === chunk.speaker) {
+      last.text += ' ' + chunk.text;
+      last.end = chunk.timestamp?.[1] ?? last.end;
+    } else {
+      groups.push({
+        speaker: chunk.speaker,
+        text: chunk.text,
+        start: chunk.timestamp?.[0] ?? 0,
+        end: chunk.timestamp?.[1] ?? 0,
+      });
+    }
+  }
+  return groups;
+}
+
+// ============================================================
+// 16. Rendering
+// ============================================================
+function renderSpeakers(chunks) {
+  const groups = groupBySpeaker(chunks);
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+  if (groups.length === 0) {
+    speakersOutput.innerHTML = '<div class="empty-state">Нет данных.</div>';
+    return;
+  }
+
+  const withTs = timestampsToggle.checked;
+
+  speakersOutput.innerHTML = groups.map(g => {
+    const color = colors[(g.speaker ?? 0) % colors.length];
+    const speakerLabel = g.speaker !== null ? `Спикер ${g.speaker + 1}` : 'Спикер';
+    const timeStr = withTs ? `${formatTime(g.start)} – ${formatTime(g.end)}` : '';
+    return `
+      <div class="speaker-block" style="border-left-color: ${color}">
+        <div class="speaker-header">
+          <span class="speaker-name" style="color: ${color}">${speakerLabel}</span>
+          ${timeStr ? `<span class="speaker-time">${timeStr}</span>` : ''}
+        </div>
+        <div class="speaker-text">${escapeHtml(g.text)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ============================================================
+// 17. Markdown
+// ============================================================
+function generateMarkdown() {
+  if (!lastResult) return '';
+
+  const title = titleInput.value.trim() || currentFile?.name.replace(/\.[^.]+$/, '') || 'Транскрипт';
+  const tags = tagsInput.value.split(',').map(t => t.trim()).filter(Boolean);
+  const withTs = timestampsToggle.checked;
+  const date = new Date().toISOString().split('T')[0];
+
+  const lines = [];
+  lines.push('---');
+  lines.push(`title: "${title}"`);
+  lines.push(`date: ${date}`);
+  if (currentFile) lines.push(`audio_file: "${currentFile.name}"`);
+  if (currentAudioDuration) lines.push(`duration: "${formatTime(currentAudioDuration, true)}"`);
+  lines.push(`language: ${langSelect.value}`);
+  if (tags.length) {
+    lines.push('tags:');
+    tags.forEach(t => lines.push(`  - ${t}`));
+  }
+  lines.push('---');
+  lines.push('');
+  lines.push(`# ${title}`);
+  lines.push('');
+
+  const speakerCount = new Set(lastResult.chunks.map(c => c.speaker).filter(s => s !== null)).size;
+  lines.push(`> **Длительность:** ${formatTime(currentAudioDuration, true)}  `);
+  lines.push(`> **Язык:** ${langSelect.value}  `);
+  if (speakerCount > 0) lines.push(`> **Спикеров:** ${speakerCount}  `);
+  lines.push(`> **Сегментов:** ${lastResult.chunks.length}`);
+  lines.push('');
+
+  if (speakerCount > 0) {
+    const groups = groupBySpeaker(lastResult.chunks);
+    lines.push('## Транскрипт по спикерам');
+    lines.push('');
+    for (const g of groups) {
+      const speakerLabel = g.speaker !== null ? `Спикер ${g.speaker + 1}` : 'Спикер';
+      const timeStr = withTs ? ` \`${formatTime(g.start)}–${formatTime(g.end)}\`` : '';
+      lines.push(`### 🗣️ ${speakerLabel}${timeStr}`);
+      lines.push('');
+      lines.push(g.text);
+      lines.push('');
+    }
+  }
+
+  lines.push('## Полный текст');
+  lines.push('');
+  const fullText = lastResult.chunks.map(c => c.text).join(' ').replace(/\s+/g, ' ').trim();
+  lines.push(fullText);
+  lines.push('');
+
+  if (withTs) {
+    lines.push('## Таймкоды');
+    lines.push('');
+    for (const chunk of lastResult.chunks) {
+      const start = formatTime(chunk.timestamp?.[0] ?? 0);
+      const speakerPrefix = chunk.speaker !== null ? `**Спикер ${chunk.speaker + 1}:** ` : '';
+      lines.push(`- \`${start}\` ${speakerPrefix}${chunk.text}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+// ============================================================
+// 18. SRT / VTT
+// ============================================================
+function generateSrt() {
+  if (!lastResult) return '';
+  const lines = [];
+  let index = 1;
+  for (const chunk of lastResult.chunks) {
+    const start = chunk.timestamp?.[0] ?? 0;
+    const end = chunk.timestamp?.[1] ?? start + 2;
+    const speakerPrefix = chunk.speaker !== null ? `[Спикер ${chunk.speaker + 1}] ` : '';
+    lines.push(index++);
+    lines.push(`${formatSrtTime(start)} --> ${formatSrtTime(end)}`);
+    lines.push(speakerPrefix + chunk.text);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+function generateVtt() {
+  if (!lastResult) return '';
+  const lines = ['WEBVTT', ''];
+  for (const chunk of lastResult.chunks) {
+    const start = chunk.timestamp?.[0] ?? 0;
+    const end = chunk.timestamp?.[1] ?? start + 2;
+    const speakerPrefix = chunk.speaker !== null ? `<v Спикер ${chunk.speaker + 1}>` : '';
+    lines.push(`${formatVttTime(start)} --> ${formatVttTime(end)}`);
+    lines.push(speakerPrefix + chunk.text);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+// ============================================================
+// 19. PDF
+// ============================================================
+function exportPdf() {
+  if (!lastResult) return;
+  log('info', 'Открываем окно печати для PDF');
+
+  const title = titleInput.value.trim() || currentFile?.name.replace(/\.[^.]+$/, '') || 'Транскрипт';
+  const withTs = timestampsToggle.checked;
+  const groups = groupBySpeaker(lastResult.chunks);
+  const speakerCount = new Set(lastResult.chunks.map(c => c.speaker).filter(s => s !== null)).size;
+  const fullText = lastResult.chunks.map(c => c.text).join(' ').replace(/\s+/g, ' ').trim();
+  const date = new Date().toLocaleString('ru-RU');
+
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(title)}</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  body { font-family: "Georgia", "Times New Roman", serif; color: #1a1a1a; line-height: 1.65; font-size: 11.5pt; margin: 0; padding: 0; }
+  h1 { font-family: -apple-system, "Segoe UI", sans-serif; font-size: 22pt; margin: 0 0 4pt 0; color: #111; border-bottom: 3px solid #3b82f6; padding-bottom: 8pt; }
+  .meta { font-family: -apple-system, "Segoe UI", sans-serif; font-size: 9pt; color: #666; margin-bottom: 18pt; display: flex; flex-wrap: wrap; gap: 4pt 16pt; }
+  .meta span { display: inline-block; }
+  h2 { font-family: -apple-system, "Segoe UI", sans-serif; font-size: 14pt; margin: 20pt 0 10pt 0; color: #111; border-bottom: 1px solid #ddd; padding-bottom: 4pt; page-break-after: avoid; }
+  .speaker { margin-bottom: 12pt; padding-left: 12pt; border-left: 3px solid #3b82f6; page-break-inside: avoid; }
+  .speaker-name { font-family: -apple-system, "Segoe UI", sans-serif; font-size: 10pt; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.5pt; margin-bottom: 3pt; }
+  .speaker-time { font-size: 8.5pt; color: #888; font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: 8pt; }
+  .speaker-text { font-size: 11pt; }
+  .full-text { text-align: justify; }
+  .timestamps { font-family: "Consolas", "Courier New", monospace; font-size: 9.5pt; line-height: 1.7; }
+  .ts-item { margin-bottom: 5pt; page-break-inside: avoid; }
+  .ts-time { color: #3b82f6; font-weight: 700; margin-right: 6pt; }
+  .footer { margin-top: 30pt; padding-top: 10pt; border-top: 1px solid #ddd; font-family: -apple-system, sans-serif; font-size: 8.5pt; color: #999; text-align: center; }
+  @media print { h2 { page-break-after: avoid; } .speaker, .ts-item { page-break-inside: avoid; } }
+</style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <div class="meta">
+    <span><strong>Дата:</strong> ${escapeHtml(date)}</span>
+    ${currentFile ? `<span><strong>Файл:</strong> ${escapeHtml(currentFile.name)}</span>` : ''}
+    <span><strong>Длительность:</strong> ${formatTime(currentAudioDuration, true)}</span>
+    <span><strong>Язык:</strong> ${langSelect.value}</span>
+    ${speakerCount > 0 ? `<span><strong>Спикеров:</strong> ${speakerCount}</span>` : ''}
+    <span><strong>Сегментов:</strong> ${lastResult.chunks.length}</span>
+  </div>
+  ${speakerCount > 0 ? `
+  <h2>Транскрипт по спикерам</h2>
+  ${groups.map(g => `
+    <div class="speaker">
+      <div class="speaker-name">
+        Спикер ${g.speaker !== null ? g.speaker + 1 : ''}
+        ${withTs ? `<span class="speaker-time">${formatTime(g.start)} – ${formatTime(g.end)}</span>` : ''}
+      </div>
+      <div class="speaker-text">${escapeHtml(g.text)}</div>
+    </div>
+  `).join('')}
+  ` : ''}
+  <h2>Полный текст</h2>
+  <div class="full-text">${escapeHtml(fullText)}</div>
+  ${withTs ? `
+  <h2>Таймкоды</h2>
+  <div class="timestamps">
+    ${lastResult.chunks.map(c => `
+      <div class="ts-item">
+        <span class="ts-time">[${formatTime(c.timestamp?.[0] ?? 0)}]</span>
+        ${c.speaker !== null ? `<strong>Спикер ${c.speaker + 1}:</strong> ` : ''}
+        ${escapeHtml(c.text)}
+      </div>
+    `).join('')}
+  </div>
+  ` : ''}
+  <div class="footer">
+    Сгенерировано Professional Transcriber · Whisper ASR + PyAnnote Diarization
+  </div>
+</body>
+</html>`;
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    logError('Не удалось открыть окно печати', new Error('window.open вернул null'), {
+      hint: 'Разрешите всплывающие окна.',
+    });
+    showToast('Разрешите всплывающие окна для PDF', true);
+    return;
+  }
+  printWindow.document.write(html);
+  printWindow.document.close();
+  setTimeout(() => { printWindow.focus(); printWindow.print(); }, 500);
+  log('success', 'Окно печати открыто');
+}
+
+// ============================================================
+// 20. Downloads
+// ============================================================
+function downloadFile(content, filename, mimeType) {
+  try {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    log('success', `Файл сохранён: ${filename}`);
+  } catch (err) {
+    logError(`Ошибка сохранения файла ${filename}`, err);
+    throw err;
+  }
+}
+
+function sanitizeFilename(name) {
+  return name.replace(/[^\w\sа-яА-ЯёЁ\-]/g, '_').slice(0, 80);
+}
+
+function getBaseFilename() {
+  const title = titleInput.value.trim() || currentFile?.name.replace(/\.[^.]+$/, '') || 'transcript';
+  return sanitizeFilename(title);
+}
+
+// ============================================================
+// 21. Main Flow
+// ============================================================
+startBtn.addEventListener('click', async () => {
+  if (!currentFile) {
+    log('warn', 'Нажата кнопка "Начать", но файл не выбран');
+    return;
+  }
+
+  if (!pipeline) {
+    logError('Transformers.js не загружена — запуск невозможен', new Error('pipeline is undefined'), {
+      protocol: location.protocol,
+      hint: 'Открыто через file://. Запустите локальный сервер: python -m http.server 8000',
+    });
+    setStatus('❌ Открыто через file:// — нужен локальный сервер', 'error');
+    return;
+  }
+
+  startBtn.disabled = true;
+  plainOutput.value = '';
+  speakersOutput.innerHTML = '<div class="empty-state">Обработка...</div>';
+  mdOutput.value = '';
+  vttOutput.value = '';
+  setExportButtons(false);
+
+  currentRun = { startedAt: Date.now(), steps: [] };
+
+  log('info', '=== НАЧАЛО ОБРАБОТКИ ===', {
+    file: currentFile.name,
+    model: modelSelect.value,
+    language: langSelect.value,
+    diarization: diarizationToggle.checked,
+  });
+
+  const mark = (name) => {
+    const t = Date.now();
+    currentRun.steps.push({ name, t });
+    log('debug', `⏱ ${name} — ${t - currentRun.startedAt} мс от старта`);
+  };
+
+  try {
+    mark('start');
+    const model = await loadTranscriber(modelSelect.value);
+    mark('whisper_loaded');
+
+    const useDiarization = diarizationToggle.checked;
+    if (useDiarization) {
+      await loadDiarizationModel();
+      mark('diarization_loaded');
+    }
+
+    setStatus('🔊 Декодирование аудио...', '');
+    setProgress(52, 'Декодирование...');
+    const audioData = await decodeAudio(currentFile);
+    mark('audio_decoded');
+
+    setStatus('🧠 Распознавание речи (Whisper)...', '');
+    setProgress(60, 'Распознавание речи...');
+    log('info', 'Запуск Whisper transcribe...');
+    const tWhisper = performance.now();
+
+    const result = await model(audioData, {
+      chunk_length_s: 30,
+      stride_length_s: 5,
+      language: langSelect.value,
+      task: 'transcribe',
+      return_timestamps: true,
+    });
+
+    const whisperElapsed = Math.round(performance.now() - tWhisper);
+    log('success', `Whisper завершён за ${whisperElapsed} мс`, {
+      chunks: result.chunks?.length || 0,
+    });
+    mark('whisper_done');
+
+    let chunks = [];
+    if (result.chunks && result.chunks.length) {
+      chunks = result.chunks.map(c => ({
+        text: (c.text || '').trim(),
+        timestamp: c.timestamp || [0, 2],
+      })).filter(c => c.text);
+    } else {
+      chunks = [{ text: (result.text || '').trim(), timestamp: [0, audioData.length / 16000] }];
+    }
+
+    let speakerSegments = [];
+    if (useDiarization && chunks.length > 0) {
+      try {
+        speakerSegments = await runDiarization(audioData);
+        mark('diarization_done');
+      } catch (err) {
+        log('warn', 'Диаризация не удалась — продолжаем без разделения спикеров');
+        setStatus('⚠️ Диаризация не удалась, один спикер.', 'warning');
+      }
+    }
+
+    setProgress(90, 'Объединение результатов...');
+    const mergedChunks = mergeTranscriptWithSpeakers(chunks, speakerSegments);
+    lastResult = { chunks: mergedChunks };
+    mark('merged');
+
+    plainOutput.value = mergedChunks.map(c => c.text).join(' ').replace(/\s+/g, ' ').trim();
+    renderSpeakers(mergedChunks);
+    mdOutput.value = generateMarkdown();
+    vttOutput.value = '=== SRT ===\n\n' + generateSrt() + '\n\n=== WebVTT ===\n\n' + generateVtt();
+    mark('rendered');
+
+    const speakerCount = new Set(mergedChunks.map(c => c.speaker).filter(s => s !== null)).size;
+    setProgress(100, 'Готово!');
+    setStatus(`✅ Готово! Сегментов: ${mergedChunks.length}, спикеров: ${speakerCount || 'не определено'}`, 'success');
+
+    const totalElapsed = Math.round((Date.now() - currentRun.startedAt) / 1000);
+    log('success', `=== ОБРАБОТКА ЗАВЕРШЕНА за ${totalElapsed} сек ===`, {
+      segments: mergedChunks.length,
+      speakers: speakerCount,
+    });
+
+    setExportButtons(true);
+
+  } catch (err) {
+    logError('Критическая ошибка обработки', err, {
+      file: currentFile?.name,
+      model: modelSelect.value,
+      elapsed_sec: Math.round((Date.now() - (currentRun?.startedAt || Date.now())) / 1000),
+    });
+    setStatus('❌ Ошибка: ' + err.message + ' — смотрите диагностику выше', 'error');
+    setProgress(0);
+  } finally {
+    startBtn.disabled = false;
+    currentRun = null;
+  }
+});
+
+function setExportButtons(enabled) {
+  [exportMdBtn, exportSrtBtn, exportVttBtn, exportPdfBtn, copyBtn].forEach(btn => {
+    btn.disabled = !enabled;
+  });
+}
+
+// ============================================================
+// 22. Tabs
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.output-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.tab + 'Panel').classList.add('active');
+
+    if (lastResult) {
+      if (tab.dataset.tab === 'md') mdOutput.value = generateMarkdown();
+      if (tab.dataset.tab === 'vtt') vttOutput.value = '=== SRT ===\n\n' + generateSrt() + '\n\n=== WebVTT ===\n\n' + generateVtt();
+      if (tab.dataset.tab === 'speakers') renderSpeakers(lastResult.chunks);
+    }
+  });
+});
+
+[timestampsToggle, titleInput, tagsInput].forEach(el => {
+  el.addEventListener('change', () => {
+    if (!lastResult) return;
+    mdOutput.value = generateMarkdown();
+    renderSpeakers(lastResult.chunks);
+  });
+  el.addEventListener('input', () => {
+    if (!lastResult || el.tagName !== 'INPUT') return;
+    mdOutput.value = generateMarkdown();
+  });
+});
+
+// ============================================================
+// 23. Export Actions
+// ============================================================
+exportMdBtn.addEventListener('click', () => {
+  if (!lastResult) return;
+  try {
+    downloadFile(generateMarkdown(), getBaseFilename() + '.md', 'text/markdown;charset=utf-8');
+    showToast('Markdown сохранён');
+  } catch (err) { showToast('Ошибка: ' + err.message, true); }
+});
+
+exportSrtBtn.addEventListener('click', () => {
+  if (!lastResult) return;
+  try {
+    downloadFile(generateSrt(), getBaseFilename() + '.srt', 'text/plain;charset=utf-8');
+    showToast('SRT субтитры сохранены');
+  } catch (err) { showToast('Ошибка: ' + err.message, true); }
+});
+
+exportVttBtn.addEventListener('click', () => {
+  if (!lastResult) return;
+  try {
+    downloadFile(generateVtt(), getBaseFilename() + '.vtt', 'text/vtt;charset=utf-8');
+    showToast('WebVTT субтитры сохранены');
+  } catch (err) { showToast('Ошибка: ' + err.message, true); }
+});
+
+exportPdfBtn.addEventListener('click', () => {
+  if (!lastResult) return;
+  try {
+    exportPdf();
+    showToast('Открылось окно печати');
+  } catch (err) { showToast('Ошибка: ' + err.message, true); }
+});
+
+copyBtn.addEventListener('click', async () => {
+  if (!lastResult) return;
+  const activeTab = document.querySelector('.tab.active').dataset.tab;
+  let text = '';
+  if (activeTab === 'plain') text = plainOutput.value;
+  else if (activeTab === 'md') text = mdOutput.value;
+  else if (activeTab === 'vtt') text = vttOutput.value;
+  else {
+    const groups = groupBySpeaker(lastResult.chunks);
+    text = groups.map(g => {
+      const label = g.speaker !== null ? `Спикер ${g.speaker + 1}` : 'Спикер';
+      return `${label}: ${g.text}`;
+    }).join('\n\n');
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Скопировано в буфер');
+  } catch (err) {
+    logError('Ошибка копирования в буфер', err);
+    showToast('Не удалось скопировать', true);
+  }
+});
+
+clearBtn.addEventListener('click', () => {
+  plainOutput.value = '';
+  mdOutput.value = '';
+  vttOutput.value = '';
+  speakersOutput.innerHTML = '<div class="empty-state">Разделение по спикерам появится здесь после обработки.</div>';
+  lastResult = null;
+  setExportButtons(false);
+  setStatus('Очищено.');
+  progressContainer.style.display = 'none';
+  log('info', 'Результаты очищены (лог сохранён)');
+});
+
+// ============================================================
+// 24. Log Panel Controls
+// ============================================================
+logHeader.addEventListener('click', (e) => {
+  if (e.target.closest('button')) return;
+  logPanel.classList.toggle('collapsed');
+  toggleLogBtn.textContent = logPanel.classList.contains('collapsed') ? '▼' : '▲';
+});
+
+toggleLogBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  logPanel.classList.toggle('collapsed');
+  toggleLogBtn.textContent = logPanel.classList.contains('collapsed') ? '▼' : '▲';
+});
+
+copyLogBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  copyReport();
+});
+
+clearLogBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  logState.entries = [];
+  logState.hasError = false;
+  logState.hasWarning = false;
+  renderLog();
+  log('info', 'Журнал очищен');
+});
+
+// ============================================================
+// 25. Init
+// ============================================================
+renderEnv();
+log('info', 'Приложение инициализировано');
+
+if (location.protocol === 'file:') {
+  warningBanner.classList.add('show');
+  log('warn', 'Открыто через file:// — модели не загрузятся', {
+    hint: 'Запустите: python -m http.server 8000 → http://localhost:8000/имя_файла.html',
+    current_url: location.href,
+  });
+}
+
+if (IMPORT_ERROR) {
+  logError('Transformers.js не загружена', IMPORT_ERROR, {
+    protocol: location.protocol,
+    hint: location.protocol === 'file:'
+      ? 'Запустите локальный сервер (python -m http.server 8000)'
+      : 'Проверьте доступ к cdn.jsdelivr.net',
+  });
+  setStatus('❌ Библиотека не загрузилась. Смотрите диагностику.', 'error');
+} else {
+  log('success', 'Transformers.js успешно загружена');
+  log('debug', 'Готово к работе — выберите файл');
+}
+
+resetFile();
+</script>
+
+</body>
+</html>
